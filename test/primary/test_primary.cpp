@@ -1,4 +1,4 @@
-#include "soso/sc_position_copy/primary.hpp"
+#include "primary.hpp"
 #include "gtest/gtest.h"
 
 TEST(HelloPrimaryTest, BasicTest) {
