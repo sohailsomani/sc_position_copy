@@ -10,6 +10,8 @@
   participant SecondaryPlugin
 
   User -> Primary: tradeCopyPrimaryPlugin = loadTradeCopyPrimaryPlugin()
+  PrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
+  PrimaryPlugin -> PrimaryPlugin: setCurrentPluginPosition(currTradePosition)
   User -> PrimaryPlugin: setPort(port)
   ...
   User -> Secondary: tradeCopySecondaryPlugin = loadTradeCopySecondaryPlugin()
@@ -21,9 +23,9 @@
   ...
   loop for each tick
   Primary -> PrimaryPlugin: callback()
-  PrimaryPlugin -> Primary: newPos = getCurrentPosition()
-  alt newPos != pluginCurrentPosition
-    PrimaryPlugin -> PrimaryPlugin: setPluginCurrentPosition(newPos)
+  PrimaryPlugin -> Primary: newPos = getCurrentTradePosition()
+  alt newPos != getCurrentPluginPosition()
+    PrimaryPlugin -> PrimaryPlugin: setCurrentPluginPosition(newPos)
     PrimaryPlugin --/ SecondaryPlugin: updatePosition(newPos)
   end
   end
