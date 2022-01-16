@@ -1,0 +1,75 @@
+* Sequence diagram
+
+#+begin_src plantuml :file sequence.png
+  @startuml
+
+  actor User
+  participant Primary
+  participant PCPrimaryPlugin
+  participant Secondary
+  participant PCSecondaryPlugin
+
+  User -> Primary: primaryPlugin = loadPCPrimaryPlugin()
+  PCPrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
+  PCPrimaryPlugin -> PCPrimaryPlugin: setCurrentPluginPosition(currTradePosition)
+  User -> PCPrimaryPlugin: setPort(port)
+  ...
+  User -> Secondary: secondaryPlugin = loadPCSecondaryPlugin()()
+  User -> PCSecondaryPlugin: setPort(port)
+  PCSecondaryPlugin -> PCPrimaryPlugin: connect(port)
+  PCPrimaryPlugin -> PCSecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
+  PCSecondaryPlugin -> User: symbols
+  User -> PCSecondaryPlugin: confirmSymbols(symbols)
+  ...
+  loop for each tick
+  Primary -> PCPrimaryPlugin: callback()
+  PCPrimaryPlugin -> Primary: newPos = getCurrentTradePosition()
+  alt newPos != getCurrentPluginPosition()
+    PCPrimaryPlugin -> PCPrimaryPlugin: setCurrentPluginPosition(newPos)
+    PCPrimaryPlugin --/ PCSecondaryPlugin: updatePosition(newPos)
+  end
+  end
+  ...
+  PCSecondaryPlugin -> PCSecondaryPlugin: delta = newPos - currPos
+  alt delta > 0
+    PCSecondaryPlugin -> Secondary: buy(delta)
+  else if delta < 0
+    PCSecondaryPlugin -> Secondary: sell(delta)
+  end
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:sequence.png]]
+
+
+* Class diagram
+
+#+begin_src plantuml :file class.png
+  class SCPlugin {
+    double getCurrentTradePosition()
+  }
+
+  class PCPrimaryPlugin {
+    +int port
+
+    -double pluginCurrentPosition
+    -ServerSocket socket
+    -vector<Connection> secondaryConnections
+
+  }
+
+  class PCSecondaryPlugin {
+    +string host
+    +int port
+    -ClientSocket socket
+
+    double pluginCurrentPosition
+  }
+
+  SCPlugin <|-- PCPrimaryPlugin
+  SCPlugin <|-- PCSecondaryPlugin
+#+end_src
+
+#+RESULTS:
+[[file:class.png]]
