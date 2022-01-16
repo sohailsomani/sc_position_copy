@@ -55,5 +55,3 @@ for conn in conns:
     time.sleep(1)
 
     send_message(f"ALLOW_LOAD_DLL--{dllwin_path}", conn.laddr.ip, conn.laddr.port)
-
-    break
