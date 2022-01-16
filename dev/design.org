@@ -1,4 +1,6 @@
-#+begin_src plantuml :file design.png
+* Sequence diagram
+
+#+begin_src plantuml :file sequence.png
   @startuml
 
   actor User
@@ -36,4 +38,4 @@
 #+end_src
 
 #+RESULTS:
-[[file:design.png]]
+[[file:sequence.png]]
