@@ -17,11 +17,13 @@
   SecondaryPlugin -> User: symbols
   User -> SecondaryPlugin: confirmSymbols(symbols)
   ...
+  loop for each tick
   Primary -> PrimaryPlugin: callback()
   PrimaryPlugin -> Primary: newPos = getCurrentPosition()
   alt newPos != pluginCurrentPosition
     PrimaryPlugin -> PrimaryPlugin: setPluginCurrentPosition(newPos)
     PrimaryPlugin --/ SecondaryPlugin: updatePosition(newPos)
+  end
   end
   ...
   SecondaryPlugin -> SecondaryPlugin: delta = newPos - currPos
