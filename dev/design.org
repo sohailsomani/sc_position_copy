@@ -5,39 +5,71 @@
 
   actor User
   participant Primary
-  participant PrimaryPlugin
+  participant TCPrimaryPlugin
   participant Secondary
-  participant SecondaryPlugin
+  participant TCSecondaryPlugin
 
-  User -> Primary: tradeCopyPrimaryPlugin = loadTradeCopyPrimaryPlugin()
-  PrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
-  PrimaryPlugin -> PrimaryPlugin: setCurrentPluginPosition(currTradePosition)
-  User -> PrimaryPlugin: setPort(port)
+  User -> Primary: tradeCopyTCPrimaryPlugin = loadTradeCopyTCPrimaryPlugin()
+  TCPrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
+  TCPrimaryPlugin -> TCPrimaryPlugin: setCurrentPluginPosition(currTradePosition)
+  User -> TCPrimaryPlugin: setPort(port)
   ...
-  User -> Secondary: tradeCopySecondaryPlugin = loadTradeCopySecondaryPlugin()
-  User -> SecondaryPlugin: setPort(port)
-  SecondaryPlugin -> PrimaryPlugin: connect(port)
-  PrimaryPlugin -> SecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
-  SecondaryPlugin -> User: symbols
-  User -> SecondaryPlugin: confirmSymbols(symbols)
+  User -> Secondary: tradeCopyTCSecondaryPlugin = loadTradeCopyTCSecondaryPlugin()
+  User -> TCSecondaryPlugin: setPort(port)
+  TCSecondaryPlugin -> TCPrimaryPlugin: connect(port)
+  TCPrimaryPlugin -> TCSecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
+  TCSecondaryPlugin -> User: symbols
+  User -> TCSecondaryPlugin: confirmSymbols(symbols)
   ...
   loop for each tick
-  Primary -> PrimaryPlugin: callback()
-  PrimaryPlugin -> Primary: newPos = getCurrentTradePosition()
+  Primary -> TCPrimaryPlugin: callback()
+  TCPrimaryPlugin -> Primary: newPos = getCurrentTradePosition()
   alt newPos != getCurrentPluginPosition()
-    PrimaryPlugin -> PrimaryPlugin: setCurrentPluginPosition(newPos)
-    PrimaryPlugin --/ SecondaryPlugin: updatePosition(newPos)
+    TCPrimaryPlugin -> TCPrimaryPlugin: setCurrentPluginPosition(newPos)
+    TCPrimaryPlugin --/ TCSecondaryPlugin: updatePosition(newPos)
   end
   end
   ...
-  SecondaryPlugin -> SecondaryPlugin: delta = newPos - currPos
+  TCSecondaryPlugin -> TCSecondaryPlugin: delta = newPos - currPos
   alt delta > 0
-    SecondaryPlugin -> Secondary: buy(delta)
+    TCSecondaryPlugin -> Secondary: buy(delta)
   else if delta < 0
-    SecondaryPlugin -> Secondary: sell(delta)
+    TCSecondaryPlugin -> Secondary: sell(delta)
   end
   @enduml
 #+end_src
 
 #+RESULTS:
 [[file:sequence.png]]
+
+
+* Class diagram
+
+#+begin_src plantuml :file class.png
+  class SCPlugin {
+    double getCurrentTradePosition()
+  }
+
+  class TCPrimaryPlugin {
+    +int port
+
+    -double pluginCurrentPosition
+    -ServerSocket socket
+    -vector<Connection> secondaryConnections
+
+  }
+
+  class TCSecondaryPlugin {
+    +string host
+    +int port
+    -ClientSocket socket
+
+    double pluginCurrentPosition
+  }
+
+  SCPlugin <|-- TCPrimaryPlugin
+  SCPlugin <|-- TCSecondaryPlugin
+#+end_src
+
+#+RESULTS:
+[[file:class.png]]
