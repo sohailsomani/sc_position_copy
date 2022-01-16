@@ -13,6 +13,7 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc) {
     sc.GraphRegion = 0;
     sc.FreeDLL = 1;
     sc.AutoLoop = 0;
+    sc.AddMessageToLog("Testing, 123", 1);
     return;
   }
 }
