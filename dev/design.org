@@ -1,0 +1,37 @@
+#+begin_src plantuml :file design.png
+  @startuml
+
+  actor User
+  participant Primary
+  participant PrimaryPlugin
+  participant Secondary
+  participant SecondaryPlugin
+
+  User -> Primary: tradeCopyPrimaryPlugin = loadTradeCopyPrimaryPlugin()
+  User -> PrimaryPlugin: setPort(port)
+  ...
+  User -> Secondary: tradeCopySecondaryPlugin = loadTradeCopySecondaryPlugin()
+  User -> SecondaryPlugin: setPort(port)
+  SecondaryPlugin -> PrimaryPlugin: connect(port)
+  PrimaryPlugin -> SecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
+  SecondaryPlugin -> User: symbols
+  User -> SecondaryPlugin: confirmSymbols(symbols)
+  ...
+  Primary -> PrimaryPlugin: callback()
+  PrimaryPlugin -> Primary: newPos = getCurrentPosition()
+  alt newPos != pluginCurrentPosition
+    PrimaryPlugin -> PrimaryPlugin: setPluginCurrentPosition(newPos)
+    PrimaryPlugin --/ SecondaryPlugin: updatePosition(newPos)
+  end
+  ...
+  SecondaryPlugin -> SecondaryPlugin: delta = newPos - currPos
+  alt delta > 0
+    SecondaryPlugin -> Secondary: buy(delta)
+  else if delta < 0
+    SecondaryPlugin -> Secondary: sell(delta)
+  end
+  @enduml
+#+end_src
+
+#+RESULTS:
+[[file:design.png]]
