@@ -7,14 +7,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(googletest)
 
 enable_testing()
-
-file(GLOB_RECURSE SOURCES *.cpp)
-
-add_executable(test_sc_position_copy ${SOURCES})
-
-target_link_libraries(test_sc_position_copy sc_position_copy gtest_main)
-
 include(GoogleTest)
-gtest_discover_tests(test_sc_position_copy)
 
-add_custom_command(TARGET test_sc_position_copy POST_BUILD COMMAND ctest)
+add_subdirectory(primary)
+add_subdirectory(secondary)
