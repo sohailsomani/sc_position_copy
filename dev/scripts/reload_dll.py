@@ -46,6 +46,7 @@ for conn in conns:
 
     send_message(f"RELEASE_DLL--{dllwin_path}", conn.laddr.ip, conn.laddr.port)
     try:
+        time.sleep(1)
         os.unlink(dll_path)
     except:
         pass

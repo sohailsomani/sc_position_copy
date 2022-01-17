@@ -1,33 +1,80 @@
 #include "primary.hpp"
 #include "boost/asio.hpp"
+#include "boost/asio/executor_work_guard.hpp"
+#include "boost/asio/io_service.hpp"
+#include "boost/log/trivial.hpp"
 #include "sierrachart.h"
+#include <thread>
 #include <unordered_map>
 
 SCDLLName("Position Copy Plugin for Primary Instance");
 
+namespace boost
+{
+void tss_cleanup_implemented() {}
+} // namespace boost
+
 struct PrimaryPlugin
 {
-  explicit PrimaryPlugin(SCStudyInterfaceRef sc, unsigned int port)
-      : m_sc(sc), m_port(port)
+  explicit PrimaryPlugin(unsigned int port)
+      : m_port(port), m_work(m_service),
+        m_thread([this]() { this->threadFunc(); })
   {
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "Creating new primary server on port %d",
-             this->port());
-    sc.AddMessageToLog(buf, 0);
+    BOOST_LOG_TRIVIAL(info)
+        << "Creating new primary server on port " << this->port();
   }
+
   ~PrimaryPlugin()
   {
-    char buf[1024];
-    snprintf(buf, sizeof(buf), "Stopping primary server on port %d",
-             this->port());
-    m_sc.AddMessageToLog(buf, 0);
+    BOOST_LOG_TRIVIAL(info)
+        << "Stopping primary server on port " << this->port();
+    m_service.stop();
+
+    try
+    {
+      BOOST_LOG_TRIVIAL(info) << "Joining thread";
+      if (m_thread.joinable())
+        m_thread.join();
+    }
+    catch (...)
+    {
+      BOOST_LOG_TRIVIAL(error) << "Exception when joining thread";
+    }
   }
 
   unsigned int port() const { return m_port; }
 
+  void getLogs(std::vector<std::string> &out) { out.clear(); }
+
 private:
-  SCStudyInterfaceRef m_sc;
+  void threadFunc()
+  {
+    BOOST_LOG_TRIVIAL(info) << "Starting thread";
+    while (!m_service.stopped())
+    {
+      try
+      {
+        m_service.run();
+      }
+      catch (std::exception const &e)
+      {
+        BOOST_LOG_TRIVIAL(error)
+            << "Exception in io_service::run: " << e.what();
+      }
+      catch (...)
+      {
+        BOOST_LOG_TRIVIAL(error) << "Unknown exception in io_service::run";
+      }
+    }
+    BOOST_LOG_TRIVIAL(info) << "Thread done";
+  }
+
+  void addLog(std::string) {}
+
   unsigned int m_port;
+  boost::asio::io_service m_service;
+  boost::asio::io_service::work m_work;
+  std::thread m_thread;
 };
 
 const char *hello_primary() { return "world"; }
@@ -50,8 +97,6 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
     Port.SetInt(12050);
     Port.SetIntLimits(1024, 65536);
     Port.SetDescription("Port number");
-
-    return;
   }
   else if (sc.LastCallToFunction)
   {
@@ -59,9 +104,10 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
     auto it = s_instances.find(&sc);
     if (it != s_instances.end())
     {
+      auto ptr = it->second;
       sc.AddMessageToLog("Stopping server", 0);
       s_instances.erase(it);
-      it->second.reset();
+      ptr.reset();
     }
   }
   else
@@ -69,8 +115,11 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
     auto it = s_instances.find(&sc);
     if (it == s_instances.end() || (it->second->port() != Port.GetInt()))
     {
-      auto it2 = s_instances.insert(std::make_pair(
-          &sc, std::make_shared<PrimaryPlugin>(sc, Port.GetInt())));
+      it = s_instances
+               .insert(std::make_pair(
+                   &sc, std::make_shared<PrimaryPlugin>(Port.GetInt())))
+               .first;
+      sc.AddMessageToLog("Started server", 0);
     }
   }
 }
