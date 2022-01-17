@@ -100,7 +100,7 @@ private:
       if (conn->socket().is_open())
       {
         boost::asio::async_write(conn->socket(), boost::asio::buffer(msg),
-                                 m_completionHandler);
+                                 makeCompletionHandler(*conn));
       }
     }
   }
@@ -120,11 +120,24 @@ private:
     for (auto &conn : m_connections)
     {
       boost::asio::async_write(conn->socket(), boost::asio::buffer("{}"),
-                               m_completionHandler);
+                               makeCompletionHandler(*conn));
     }
     m_timer.expires_after(boost::asio::chrono::seconds(1));
     m_timer.async_wait(
         [this](const boost::system::error_code &) { sendPing(); });
+  }
+
+  std::function<void(boost::system::error_code const &ec, std::size_t)>
+  makeCompletionHandler(Connection &conn)
+  {
+    return [&conn](boost::system::error_code const &ec, std::size_t) {
+      if (ec)
+      {
+        BOOST_LOG_TRIVIAL(error) << "Error, closing socket: " << ec;
+        boost::system::error_code ec2;
+        conn.socket().close(ec2);
+      }
+    };
   }
 
   void accept()
@@ -174,9 +187,6 @@ private:
   std::vector<std::unique_ptr<Connection>> m_connections;
   std::thread m_thread;
   boost::asio::steady_timer m_timer;
-  std::function<void(boost::system::error_code const &, std::size_t)>
-      m_completionHandler = [](boost::system::error_code const &ec,
-                               std::size_t bytesTransferred) {};
 };
 
 const char *hello_primary() { return "world"; }
