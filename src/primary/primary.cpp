@@ -5,6 +5,8 @@
 #include "boost/asio/executor_work_guard.hpp"
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/write.hpp"
+#include "boost/date_time/gregorian/formatters.hpp"
+#include "boost/date_time/posix_time/time_formatters.hpp"
 #include "boost/log/trivial.hpp"
 #include "boost/system/detail/errc.hpp"
 #include "boost/system/is_error_code_enum.hpp"
@@ -92,7 +94,7 @@ private:
   void sendPosition()
   {
     std::ostringstream oss;
-    oss << "{'position':" << m_position << "}";
+    oss << "{\"position\":" << m_position << "}";
     std::string msg(oss.str());
 
     for (auto &conn : m_connections)
@@ -117,9 +119,11 @@ private:
     {
       BOOST_LOG_TRIVIAL(info) << m_connections.size() << " clients connected";
     }
+    std::ostringstream oss;
+    oss << "{\"ping\":\"" << boost::posix_time::to_iso_string(tick) << "\"}";
     for (auto &conn : m_connections)
     {
-      boost::asio::async_write(conn->socket(), boost::asio::buffer("{}"),
+      boost::asio::async_write(conn->socket(), boost::asio::buffer(oss.str()),
                                makeCompletionHandler(*conn));
     }
     m_timer.expires_after(boost::asio::chrono::seconds(1));

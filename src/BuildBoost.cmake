@@ -18,6 +18,7 @@ file(GLOB
   "${boost_SOURCE_DIR}/libs/thread/src/*.cpp"
   "${boost_SOURCE_DIR}/libs/thread/src/win32/*.cpp"
   "${boost_SOURCE_DIR}/libs/system/src/*.cpp"
+  "${boost_SOURCE_DIR}/libs/json/src/*.cpp"
   )
 add_library(boost STATIC ${BOOST_SOURCES})
 
