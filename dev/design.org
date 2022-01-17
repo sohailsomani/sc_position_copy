@@ -9,12 +9,12 @@
   participant Secondary
   participant PCSecondaryPlugin
 
-  User -> Primary: tradeCopyPCPrimaryPlugin = loadTradeCopyPCPrimaryPlugin()
+  User -> Primary: primaryPlugin = loadPCPrimaryPlugin()
   PCPrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
   PCPrimaryPlugin -> PCPrimaryPlugin: setCurrentPluginPosition(currTradePosition)
   User -> PCPrimaryPlugin: setPort(port)
   ...
-  User -> Secondary: tradeCopyPCSecondaryPlugin = loadTradeCopyPCSecondaryPlugin()
+  User -> Secondary: secondaryPlugin = loadPCSecondaryPlugin()()
   User -> PCSecondaryPlugin: setPort(port)
   PCSecondaryPlugin -> PCPrimaryPlugin: connect(port)
   PCPrimaryPlugin -> PCSecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
