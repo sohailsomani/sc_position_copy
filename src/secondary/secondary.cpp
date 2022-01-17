@@ -209,12 +209,6 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
     Port.SetIntLimits(1024, 65536);
     Port.SetDescription("Port number");
   }
-  else if (sc.LastCallToFunction)
-  {
-    auto ptr = (SecondaryPlugin *)sc.GetPersistentPointer(1);
-    delete ptr;
-    sc.SetPersistentPointer(1, nullptr);
-  }
   else
   {
     auto ptr = (SecondaryPlugin *)sc.GetPersistentPointer(1);
@@ -259,6 +253,12 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           }
         }
       }
+    }
+    if (sc.LastCallToFunction)
+    {
+      auto ptr = (SecondaryPlugin *)sc.GetPersistentPointer(1);
+      delete ptr;
+      sc.SetPersistentPointer(1, nullptr);
     }
   }
 }
