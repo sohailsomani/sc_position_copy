@@ -1,5 +1,6 @@
 #include "primary.hpp"
 #include "boost/asio.hpp"
+#include "boost/asio/dispatch.hpp"
 #include "boost/asio/executor_work_guard.hpp"
 #include "boost/asio/io_service.hpp"
 #include "boost/asio/write.hpp"
@@ -7,8 +8,10 @@
 #include "boost/system/detail/errc.hpp"
 #include "boost/system/is_error_code_enum.hpp"
 #include "sierrachart.h"
+#include <sstream>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 
 SCDLLName("Position Copy Plugin for Primary Instance");
 
@@ -39,6 +42,17 @@ struct Connection
     sendPing();
   }
 
+  void sendTick(float tick)
+  {
+    std::ostringstream ss;
+    ss << "TICK-" << tick;
+    std::string msg(ss.str());
+    boost::asio::async_write(
+        m_socket, boost::asio::buffer(msg),
+        [this](boost::system::error_code const &ec,
+               std::size_t bytesTransferred) { processErrorCode(ec); });
+  }
+
 private:
   void sendPing()
   {
@@ -47,13 +61,13 @@ private:
       boost::asio::async_write(m_socket, boost::asio::buffer("PING"),
                                [this](const boost::system::error_code &ec,
                                       size_t bytes_transferred) {
-                                 if (keepGoing(ec))
+                                 if (processErrorCode(ec))
                                    sendPing();
                                });
     });
   }
 
-  bool keepGoing(const boost::system::error_code &ec) const
+  bool processErrorCode(const boost::system::error_code &ec)
   {
     bool shouldKeepGoing = ec != boost::asio::error::eof &&
                            ec != boost::asio::error::connection_reset;
@@ -101,6 +115,13 @@ struct PrimaryPlugin
   }
 
   unsigned int port() const { return m_port; }
+  void sendTick(float last)
+  {
+    for (auto &conn : m_connections)
+    {
+      conn->sendTick(last);
+    }
+  }
 
 private:
   void accept()
@@ -193,5 +214,6 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
                .first;
       sc.AddMessageToLog("Started server", 0);
     }
+    it->second->sendTick(sc.Close[0]);
   }
 }
