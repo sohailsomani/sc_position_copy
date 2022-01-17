@@ -11,6 +11,7 @@
 #include "boost/system/detail/errc.hpp"
 #include "boost/system/is_error_code_enum.hpp"
 #include "sierrachart.h"
+#include <mutex>
 #include <sstream>
 #include <thread>
 #include <unordered_map>
@@ -54,7 +55,8 @@ struct PrimaryPlugin
   explicit PrimaryPlugin(unsigned int port)
       : m_position(0), m_port(port), m_work(m_service),
         m_endpoint(tcp::v4(), port), m_acceptor(m_service, m_endpoint),
-        m_thread([this]() { this->threadFunc(); }), m_timer(m_service)
+        m_thread(std::bind(&PrimaryPlugin::threadFunc, this)),
+        m_timer(m_service)
   {
     BOOST_LOG_TRIVIAL(info)
         << "Creating new primary server on port " << this->port();
@@ -195,50 +197,49 @@ private:
 
 const char *hello_primary() { return "world"; }
 
-static std::unordered_map<s_sc *, std::unique_ptr<PrimaryPlugin>> s_instances;
-
 SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
 {
   SCInputRef Port = sc.Input[0];
 
-  if (sc.SetDefaults)
+  try
   {
-    sc.GraphName = "Primary instance for position copying";
-    sc.StudyDescription = "Relay position updates to clients";
-    sc.GraphRegion = 0;
-    sc.FreeDLL = 1;
-    sc.AutoLoop = 0;
+    if (sc.SetDefaults)
+    {
+      sc.GraphName = "Primary instance for position copying";
+      sc.StudyDescription = "Relay position updates to clients";
+      sc.GraphRegion = 0;
+      sc.FreeDLL = 1;
+      sc.AutoLoop = 0;
 
-    Port.Name = "Server port";
-    Port.SetInt(12050);
-    Port.SetIntLimits(1024, 65536);
-    Port.SetDescription("Port number");
-  }
-  else if (sc.LastCallToFunction)
-  {
-    sc.AddMessageToLog("Last call", 0);
-    auto it = s_instances.find(&sc);
-    if (it != s_instances.end())
+      Port.Name = "Server port";
+      Port.SetInt(12050);
+      Port.SetIntLimits(1024, 65536);
+      Port.SetDescription("Port number");
+    }
+    else if (sc.LastCallToFunction)
     {
-      auto ptr = std::move(it->second);
-      sc.AddMessageToLog("Stopping server", 0);
-      s_instances.erase(it);
-      ptr.reset();
+      auto ptr = (PrimaryPlugin *)sc.GetPersistentPointer(1);
+      delete ptr;
+      sc.SetPersistentPointer(1, nullptr);
+    }
+    else
+    {
+      auto ptr = (PrimaryPlugin *)sc.GetPersistentPointer(1);
+      if (!ptr || ptr->port() != Port.GetInt())
+      {
+        delete ptr;
+        ptr = new PrimaryPlugin(Port.GetInt());
+        sc.SetPersistentPointer(1, ptr);
+        sc.AddMessageToLog("Started server", 0);
+      }
+      s_SCPositionData position;
+      sc.GetTradePosition(position);
+      ptr->processPosition(position.PositionQuantity);
     }
   }
-  else
+  catch (std::exception const &e)
   {
-    auto it = s_instances.find(&sc);
-    if (it == s_instances.end() || (it->second->port() != Port.GetInt()))
-    {
-      it = s_instances
-               .insert(std::make_pair(
-                   &sc, std::make_unique<PrimaryPlugin>(Port.GetInt())))
-               .first;
-      sc.AddMessageToLog("Started server", 0);
-    }
-    s_SCPositionData position;
-    sc.GetTradePosition(position);
-    it->second->processPosition(position.PositionQuantity);
+    sc.AddMessageToLog(e.what(), 1);
+    BOOST_LOG_TRIVIAL(error) << e.what();
   }
 }

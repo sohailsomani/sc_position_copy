@@ -122,6 +122,14 @@ private:
           {
             BOOST_LOG_TRIVIAL(error) << "Closing socket due to error: " << ec;
             m_socket.close();
+            auto timer =
+                std::make_shared<boost::asio::deadline_timer>(m_service);
+            timer->expires_from_now(boost::posix_time::seconds(5));
+            timer->async_wait(
+                [timer, this](const boost::system::error_code &ec) mutable {
+                  connect();
+                  timer.reset();
+                });
           }
           else
           {
@@ -168,8 +176,6 @@ private:
 
 const char *hello_secondary() { return "world"; }
 
-static std::unordered_map<s_sc *, std::unique_ptr<SecondaryPlugin>> s_instances;
-
 SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 {
   SCInputRef Host = sc.Input[0];
@@ -194,58 +200,51 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
   }
   else if (sc.LastCallToFunction)
   {
-    sc.AddMessageToLog("Last call", 0);
-    auto it = s_instances.find(&sc);
-    if (it != s_instances.end())
-    {
-      auto ptr = std::move(it->second);
-      sc.AddMessageToLog("Stopping client", 0);
-      s_instances.erase(it);
-      ptr.reset();
-    }
+    auto ptr = (SecondaryPlugin *)sc.GetPersistentPointer(1);
+    delete ptr;
+    sc.SetPersistentPointer(1, nullptr);
   }
   else
   {
-    auto it = s_instances.find(&sc);
-    if (it == s_instances.end() || (it->second->port() != Port.GetInt()))
+    auto ptr = (SecondaryPlugin *)sc.GetPersistentPointer(1);
+    if (!ptr || ptr->port() != Port.GetInt())
     {
-      it =
-          s_instances
-              .insert(std::make_pair(&sc, std::make_unique<SecondaryPlugin>(
-                                              Host.GetString(), Port.GetInt())))
-              .first;
+      ptr = new SecondaryPlugin(Host.GetString(), Port.GetInt());
+      sc.SetPersistentPointer(1, ptr);
       sc.AddMessageToLog("Started client", 0);
     }
-    for (auto &pair : s_instances)
+    if (ptr->gotFirstUpdate())
     {
-      if (!pair.second->gotFirstUpdate())
-        continue;
 
       s_SCPositionData position;
       sc.GetTradePosition(position);
 
-      if (position.WorkingOrdersExist)
-        continue;
-
-      auto delta = pair.second->position() - position.PositionQuantity;
-      if (delta != 0)
+      if (!position.WorkingOrdersExist)
       {
-        sc.SendOrdersToTradeService = 1;
 
-        s_SCNewOrder newOrder;
-        newOrder.OrderQuantity = delta;
-        newOrder.OrderType = SCT_ORDERTYPE_MARKET;
-        newOrder.TimeInForce = SCT_TIF_IMMEDIATE_OR_CANCEL;
-        BOOST_LOG_TRIVIAL(info)
-            << "Current position " << position.PositionQuantity
-            << " Adjusting by " << delta;
-        if (delta > 0)
+        auto delta = ptr->position() - position.PositionQuantity;
+        if (delta != 0)
         {
-          sc.BuyEntry(newOrder);
-        }
-        else if (delta < 0)
-        {
-          sc.SellEntry(newOrder);
+          sc.SendOrdersToTradeService = 1;
+          sc.AllowMultipleEntriesInSameDirection = 1;
+          sc.AllowEntryWithWorkingOrders = 0;
+          sc.AllowOnlyOneTradePerBar = 1;
+
+          s_SCNewOrder newOrder;
+          newOrder.OrderQuantity = delta;
+          newOrder.OrderType = SCT_ORDERTYPE_MARKET;
+          newOrder.TimeInForce = SCT_TIF_DAY;
+          BOOST_LOG_TRIVIAL(info)
+              << "Current position " << position.PositionQuantity
+              << " Adjusting by " << delta;
+          if (delta > 0)
+          {
+            sc.BuyEntry(newOrder);
+          }
+          else if (delta < 0)
+          {
+            sc.SellEntry(newOrder);
+          }
         }
       }
     }
