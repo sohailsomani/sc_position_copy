@@ -42,17 +42,6 @@ struct Connection
     sendPing();
   }
 
-  void sendTick(float tick)
-  {
-    std::ostringstream ss;
-    ss << "TICK-" << tick;
-    std::string msg(ss.str());
-    boost::asio::async_write(
-        m_socket, boost::asio::buffer(msg),
-        [this](boost::system::error_code const &ec,
-               std::size_t bytesTransferred) { processErrorCode(ec); });
-  }
-
 private:
   void sendPing()
   {
@@ -115,13 +104,6 @@ struct PrimaryPlugin
   }
 
   unsigned int port() const { return m_port; }
-  void sendTick(float last)
-  {
-    for (auto &conn : m_connections)
-    {
-      conn->sendTick(last);
-    }
-  }
 
 private:
   void accept()
@@ -214,6 +196,5 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
                .first;
       sc.AddMessageToLog("Started server", 0);
     }
-    it->second->sendTick(sc.Close[0]);
   }
 }
