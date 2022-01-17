@@ -228,7 +228,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           sc.SendOrdersToTradeService = 1;
           sc.AllowMultipleEntriesInSameDirection = 1;
           sc.AllowEntryWithWorkingOrders = 0;
-          sc.AllowOnlyOneTradePerBar = 1;
+          sc.AllowOnlyOneTradePerBar = 0;
 
           s_SCNewOrder newOrder;
           newOrder.OrderQuantity = delta;
