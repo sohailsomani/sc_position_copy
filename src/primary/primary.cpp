@@ -44,8 +44,6 @@ struct PrimaryPlugin
 
   unsigned int port() const { return m_port; }
 
-  void getLogs(std::vector<std::string> &out) { out.clear(); }
-
 private:
   void threadFunc()
   {
