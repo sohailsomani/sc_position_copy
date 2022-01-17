@@ -209,6 +209,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
     auto ptr = (SecondaryPlugin *)sc.GetPersistentPointer(1);
     if (!ptr || ptr->port() != Port.GetInt())
     {
+      delete ptr;
       ptr = new SecondaryPlugin(Host.GetString(), Port.GetInt());
       sc.SetPersistentPointer(1, ptr);
       sc.AddMessageToLog("Started client", 0);
