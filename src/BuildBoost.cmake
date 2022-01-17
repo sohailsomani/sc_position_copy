@@ -17,10 +17,11 @@ file(GLOB
   "${boost_SOURCE_DIR}/libs/log/src/windows/*.cpp"
   "${boost_SOURCE_DIR}/libs/thread/src/*.cpp"
   "${boost_SOURCE_DIR}/libs/thread/src/win32/*.cpp"
+  "${boost_SOURCE_DIR}/libs/system/src/*.cpp"
   )
 add_library(boost STATIC ${BOOST_SOURCES})
 
 target_include_directories(boost PUBLIC ${boost_SOURCE_DIR}
   PRIVATE "${boost_SOURCE_DIR}/libs/log/src")
 target_compile_definitions(boost PRIVATE BOOST_LOG_WITHOUT_EVENT_LOG SECURITY_WIN32)
-target_link_libraries(boost PUBLIC ws2_32)
+target_link_libraries(boost PUBLIC ws2_32 mswsock)
