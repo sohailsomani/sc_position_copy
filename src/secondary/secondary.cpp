@@ -230,6 +230,8 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       auto delta = pair.second->position() - position.PositionQuantity;
       if (delta != 0)
       {
+        sc.SendOrdersToTradeService = 1;
+
         s_SCNewOrder newOrder;
         newOrder.OrderQuantity = delta;
         newOrder.OrderType = SCT_ORDERTYPE_MARKET;
