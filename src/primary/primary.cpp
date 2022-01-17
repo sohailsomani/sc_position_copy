@@ -92,6 +92,8 @@ struct PrimaryPlugin
     }
   }
 
+  unsigned int numClients() const { return m_connections.size(); }
+
 private:
   void sendPosition()
   {
@@ -199,7 +201,16 @@ const char *hello_primary() { return "world"; }
 
 SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
 {
+
+  SCSubgraphRef Subgraph_ServerInfo = sc.Subgraph[0];
+
   SCInputRef Port = sc.Input[0];
+  SCInputRef Input_HorizontalPosition = sc.Input[1];
+  SCInputRef Input_VerticalPosition = sc.Input[2];
+  SCInputRef Input_DrawAboveMainPriceGraph = sc.Input[3];
+  SCInputRef Input_UseBoldFont = sc.Input[4];
+  SCInputRef Input_TransparentLabelBackground = sc.Input[5];
+  SCInputRef Input_TextSize = sc.Input[6];
 
   try
   {
@@ -215,12 +226,41 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
       Port.SetInt(12050);
       Port.SetIntLimits(1024, 65536);
       Port.SetDescription("Port number");
-    }
-    else if (sc.LastCallToFunction)
-    {
-      auto ptr = (PrimaryPlugin *)sc.GetPersistentPointer(1);
-      delete ptr;
-      sc.SetPersistentPointer(1, nullptr);
+
+      Subgraph_ServerInfo.Name = "Server info";
+      Subgraph_ServerInfo.LineWidth = 20;
+      Subgraph_ServerInfo.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
+      Subgraph_ServerInfo.PrimaryColor = RGB(0, 0, 0);       // black
+      Subgraph_ServerInfo.SecondaryColor = RGB(255, 127, 0); // Orange
+      Subgraph_ServerInfo.SecondaryColorUsed = true;
+      Subgraph_ServerInfo.DisplayNameValueInWindowsFlags = 1;
+
+      Input_HorizontalPosition.Name.Format(
+          "Initial Horizontal Position From Left (1-%d)",
+          (int)CHART_DRAWING_MAX_HORIZONTAL_AXIS_RELATIVE_POSITION);
+      Input_HorizontalPosition.SetInt(20);
+      Input_HorizontalPosition.SetIntLimits(
+          1, (int)CHART_DRAWING_MAX_HORIZONTAL_AXIS_RELATIVE_POSITION);
+
+      Input_VerticalPosition.Name.Format(
+          "Initial Vertical Position From Bottom (1-%d)",
+          (int)CHART_DRAWING_MAX_VERTICAL_AXIS_RELATIVE_POSITION);
+      Input_VerticalPosition.SetInt(90);
+      Input_VerticalPosition.SetIntLimits(
+          1, (int)CHART_DRAWING_MAX_VERTICAL_AXIS_RELATIVE_POSITION);
+
+      Input_DrawAboveMainPriceGraph.Name = "Draw Above Main Price Graph";
+      Input_DrawAboveMainPriceGraph.SetYesNo(false);
+
+      Input_UseBoldFont.Name = "Use Bold Font";
+      Input_UseBoldFont.SetYesNo(true);
+
+      Input_TextSize.Name = "Text Size";
+      Input_TextSize.SetInt(14);
+      Input_TextSize.SetIntLimits(3, 50);
+
+      Input_TransparentLabelBackground.Name = "Transparent Label Background";
+      Input_TransparentLabelBackground.SetYesNo(false);
     }
     else
     {
@@ -235,6 +275,32 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
       s_SCPositionData position;
       sc.GetTradePosition(position);
       ptr->processPosition(position.PositionQuantity);
+
+      SCString ServerInfo;
+      ServerInfo.Format("Port: %d NumClients: %d", ptr->port(),
+                        ptr->numClients());
+
+      int HorizontalPosition = Input_HorizontalPosition.GetInt();
+      int VerticalPosition = Input_VerticalPosition.GetInt();
+
+      int DrawAboveMainPriceGraph = Input_DrawAboveMainPriceGraph.GetYesNo();
+
+      int TransparentLabelBackground =
+          Input_TransparentLabelBackground.GetYesNo();
+      int UseBoldFont = Input_UseBoldFont.GetYesNo();
+      Subgraph_ServerInfo.LineWidth = Input_TextSize.GetInt();
+
+      sc.AddAndManageSingleTextUserDrawnDrawingForStudy(
+          sc, 0, HorizontalPosition, VerticalPosition, Subgraph_ServerInfo,
+          TransparentLabelBackground, ServerInfo, DrawAboveMainPriceGraph, 0,
+          UseBoldFont);
+
+      if (sc.LastCallToFunction)
+      {
+        auto ptr = (PrimaryPlugin *)sc.GetPersistentPointer(1);
+        delete ptr;
+        sc.SetPersistentPointer(1, nullptr);
+      }
     }
   }
   catch (std::exception const &e)

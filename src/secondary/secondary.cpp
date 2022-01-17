@@ -34,8 +34,8 @@ using boost::asio::io_service;
 struct SecondaryPlugin
 {
   explicit SecondaryPlugin(std::string const &host, unsigned int port)
-      : m_gotFirstUpdate(false), m_position(0), m_host(host), m_port(port),
-        m_work(m_service), m_timer(m_service), m_socket(m_service),
+      : m_host(host), m_port(port), m_work(m_service),
+        m_reconnectTimer(m_service), m_socket(m_service),
         m_thread(std::bind(&SecondaryPlugin::threadFunc, this))
   {
     connect();
@@ -76,17 +76,35 @@ private:
 
   void connect()
   {
-    auto endpoints = resolve(m_host, m_port);
-    boost::asio::async_connect(m_socket, endpoints,
-                               [this](const boost::system::error_code &ec,
-                                      const tcp::endpoint &endpoint) {
-                                 if (!ec)
-                                 {
-                                   BOOST_LOG_TRIVIAL(info)
-                                       << "Connected to " << endpoint;
-                                   readNext();
-                                 }
-                               });
+    m_reconnectTimer.expires_from_now(boost::asio::chrono::seconds(5));
+    m_reconnectTimer.async_wait(
+        [this](const boost::system::error_code &ec) mutable {
+          if (!m_socket.is_open() || !m_isConnected)
+          {
+            m_socket.close();
+            auto endpoints = resolve(m_host, m_port);
+            BOOST_LOG_TRIVIAL(info)
+                << "Connecting to " << m_host << ":" << m_port;
+            boost::asio::async_connect(
+                m_socket, endpoints,
+                [this](const boost::system::error_code &ec,
+                       const tcp::endpoint &endpoint) {
+                  if (!ec)
+                  {
+                    BOOST_LOG_TRIVIAL(info) << "Connected to " << endpoint;
+                    m_isConnected = true;
+                    readNext();
+                  }
+                  else
+                  {
+                    BOOST_LOG_TRIVIAL(info) << "Connection failure " << ec;
+                    m_socket.close();
+                    m_isConnected = false;
+                  }
+                });
+          }
+          connect();
+        });
   }
 
   void readNext()
@@ -122,14 +140,6 @@ private:
           {
             BOOST_LOG_TRIVIAL(error) << "Closing socket due to error: " << ec;
             m_socket.close();
-            auto timer =
-                std::make_shared<boost::asio::deadline_timer>(m_service);
-            timer->expires_from_now(boost::posix_time::seconds(5));
-            timer->async_wait(
-                [timer, this](const boost::system::error_code &ec) mutable {
-                  connect();
-                  timer.reset();
-                });
           }
           else
           {
@@ -161,15 +171,16 @@ private:
     BOOST_LOG_TRIVIAL(info) << "Thread done";
   }
 
-  bool m_gotFirstUpdate;
-  t_OrderQuantity32_64 m_position;
+  bool m_gotFirstUpdate = false;
+  bool m_isConnected = false;
+  t_OrderQuantity32_64 m_position = 0;
   std::string m_host;
   unsigned int m_port;
   boost::asio::io_service m_service;
   boost::asio::io_service::work m_work;
   const tcp::resolver::results_type m_endpoints;
   tcp::socket m_socket;
-  boost::asio::steady_timer m_timer;
+  boost::asio::steady_timer m_reconnectTimer;
   std::thread m_thread;
   std::string m_buffer;
 };
