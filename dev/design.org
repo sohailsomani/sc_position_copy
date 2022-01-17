@@ -5,36 +5,36 @@
 
   actor User
   participant Primary
-  participant TCPrimaryPlugin
+  participant PCPrimaryPlugin
   participant Secondary
-  participant TCSecondaryPlugin
+  participant PCSecondaryPlugin
 
-  User -> Primary: tradeCopyTCPrimaryPlugin = loadTradeCopyTCPrimaryPlugin()
-  TCPrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
-  TCPrimaryPlugin -> TCPrimaryPlugin: setCurrentPluginPosition(currTradePosition)
-  User -> TCPrimaryPlugin: setPort(port)
+  User -> Primary: tradeCopyPCPrimaryPlugin = loadTradeCopyPCPrimaryPlugin()
+  PCPrimaryPlugin -> Primary: currTradePosition = getCurrentTradePosition()
+  PCPrimaryPlugin -> PCPrimaryPlugin: setCurrentPluginPosition(currTradePosition)
+  User -> PCPrimaryPlugin: setPort(port)
   ...
-  User -> Secondary: tradeCopyTCSecondaryPlugin = loadTradeCopyTCSecondaryPlugin()
-  User -> TCSecondaryPlugin: setPort(port)
-  TCSecondaryPlugin -> TCPrimaryPlugin: connect(port)
-  TCPrimaryPlugin -> TCSecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
-  TCSecondaryPlugin -> User: symbols
-  User -> TCSecondaryPlugin: confirmSymbols(symbols)
+  User -> Secondary: tradeCopyPCSecondaryPlugin = loadTradeCopyPCSecondaryPlugin()
+  User -> PCSecondaryPlugin: setPort(port)
+  PCSecondaryPlugin -> PCPrimaryPlugin: connect(port)
+  PCPrimaryPlugin -> PCSecondaryPlugin: symbols = {"chart_symbol": "...", "trade_symbol": "..."}
+  PCSecondaryPlugin -> User: symbols
+  User -> PCSecondaryPlugin: confirmSymbols(symbols)
   ...
   loop for each tick
-  Primary -> TCPrimaryPlugin: callback()
-  TCPrimaryPlugin -> Primary: newPos = getCurrentTradePosition()
+  Primary -> PCPrimaryPlugin: callback()
+  PCPrimaryPlugin -> Primary: newPos = getCurrentTradePosition()
   alt newPos != getCurrentPluginPosition()
-    TCPrimaryPlugin -> TCPrimaryPlugin: setCurrentPluginPosition(newPos)
-    TCPrimaryPlugin --/ TCSecondaryPlugin: updatePosition(newPos)
+    PCPrimaryPlugin -> PCPrimaryPlugin: setCurrentPluginPosition(newPos)
+    PCPrimaryPlugin --/ PCSecondaryPlugin: updatePosition(newPos)
   end
   end
   ...
-  TCSecondaryPlugin -> TCSecondaryPlugin: delta = newPos - currPos
+  PCSecondaryPlugin -> PCSecondaryPlugin: delta = newPos - currPos
   alt delta > 0
-    TCSecondaryPlugin -> Secondary: buy(delta)
+    PCSecondaryPlugin -> Secondary: buy(delta)
   else if delta < 0
-    TCSecondaryPlugin -> Secondary: sell(delta)
+    PCSecondaryPlugin -> Secondary: sell(delta)
   end
   @enduml
 #+end_src
@@ -50,7 +50,7 @@
     double getCurrentTradePosition()
   }
 
-  class TCPrimaryPlugin {
+  class PCPrimaryPlugin {
     +int port
 
     -double pluginCurrentPosition
@@ -59,7 +59,7 @@
 
   }
 
-  class TCSecondaryPlugin {
+  class PCSecondaryPlugin {
     +string host
     +int port
     -ClientSocket socket
@@ -67,8 +67,8 @@
     double pluginCurrentPosition
   }
 
-  SCPlugin <|-- TCPrimaryPlugin
-  SCPlugin <|-- TCSecondaryPlugin
+  SCPlugin <|-- PCPrimaryPlugin
+  SCPlugin <|-- PCSecondaryPlugin
 #+end_src
 
 #+RESULTS:

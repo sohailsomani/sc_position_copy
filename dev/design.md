@@ -1,18 +1,18 @@
 
 # Table of Contents
 
-1.  [Sequence diagram](#org4be5ea3)
-2.  [Class diagram](#orgcce7a3b)
+1.  [Sequence diagram](#orge4af65b)
+2.  [Class diagram](#orgc10581c)
 
 
-<a id="org4be5ea3"></a>
+<a id="orge4af65b"></a>
 
 # Sequence diagram
 
 ![img](sequence.png)
 
 
-<a id="orgcce7a3b"></a>
+<a id="orgc10581c"></a>
 
 # Class diagram
 
