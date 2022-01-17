@@ -7,6 +7,8 @@
 #include "boost/asio/write.hpp"
 #include "boost/date_time/gregorian/formatters.hpp"
 #include "boost/date_time/posix_time/time_formatters.hpp"
+#include "boost/json/object.hpp"
+#include "boost/json/serialize.hpp"
 #include "boost/log/trivial.hpp"
 #include "boost/system/detail/errc.hpp"
 #include "boost/system/is_error_code_enum.hpp"
@@ -52,8 +54,8 @@ private:
 
 struct PrimaryPlugin
 {
-  explicit PrimaryPlugin(unsigned int port)
-      : m_position(0), m_port(port), m_work(m_service),
+  explicit PrimaryPlugin(std::string chartbookName, unsigned int port)
+      : m_chartbookName(chartbookName), m_port(port), m_work(m_service),
         m_endpoint(tcp::v4(), port), m_acceptor(m_service, m_endpoint),
         m_thread(std::bind(&PrimaryPlugin::threadFunc, this)),
         m_timer(m_service)
@@ -95,21 +97,21 @@ struct PrimaryPlugin
   unsigned int numClients() const { return m_connections.size(); }
 
 private:
-  void sendPosition()
+  void sendMessage(boost::json::object msg)
   {
-    std::ostringstream oss;
-    oss << "{\"position\":" << m_position << "}";
-    std::string msg(oss.str());
-
+    msg["cb"] = m_chartbookName;
+    const auto json = boost::json::serialize(msg);
     for (auto &conn : m_connections)
     {
       if (conn->socket().is_open())
       {
-        boost::asio::async_write(conn->socket(), boost::asio::buffer(msg),
+        boost::asio::async_write(conn->socket(), boost::asio::buffer(json),
                                  makeCompletionHandler(*conn));
       }
     }
   }
+
+  void sendPosition() { sendMessage({{"position", m_position}}); }
 
   void sendPing()
   {
@@ -123,13 +125,12 @@ private:
     {
       BOOST_LOG_TRIVIAL(info) << m_connections.size() << " clients connected";
     }
-    std::ostringstream oss;
-    oss << "{\"ping\":\"" << boost::posix_time::to_iso_string(tick) << "\"}";
-    for (auto &conn : m_connections)
-    {
-      boost::asio::async_write(conn->socket(), boost::asio::buffer(oss.str()),
-                               makeCompletionHandler(*conn));
-    }
+    boost::json::object msg = {
+        {"ping", boost::posix_time::to_iso_string(tick)},
+    };
+
+    sendMessage(msg);
+
     m_timer.expires_after(boost::asio::chrono::seconds(1));
     m_timer.async_wait(
         [this](const boost::system::error_code &) { sendPing(); });
@@ -186,7 +187,8 @@ private:
     BOOST_LOG_TRIVIAL(info) << "Thread done";
   }
 
-  t_OrderQuantity32_64 m_position;
+  t_OrderQuantity32_64 m_position = 0;
+  std::string m_chartbookName;
   unsigned int m_port;
   boost::asio::io_service m_service;
   boost::asio::io_service::work m_work;
@@ -268,7 +270,7 @@ SCSFExport scsf_PrimaryInstance(SCStudyInterfaceRef sc)
       if (!ptr || ptr->port() != Port.GetInt())
       {
         delete ptr;
-        ptr = new PrimaryPlugin(Port.GetInt());
+        ptr = new PrimaryPlugin(sc.ChartbookName().GetChars(), Port.GetInt());
         sc.SetPersistentPointer(1, ptr);
         sc.AddMessageToLog("Started server", 0);
       }
