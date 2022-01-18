@@ -348,7 +348,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
                             serverBook.c_str(),
                             timeSinceLastMessage.total_milliseconds());
 
-      if (timeSinceLastMessage >= boost::posix_time::time_duration(0, 0, 5) &&
+      if (timeSinceLastMessage >= boost::posix_time::seconds(5) &&
           int(timeSinceLastMessage.total_seconds()) % 5 == 0)
       {
         sc.AddMessageToLog("Lost connection to server chartbook", 1);
