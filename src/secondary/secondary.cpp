@@ -8,6 +8,7 @@
 #include "boost/asio/read_until.hpp"
 #include "boost/asio/steady_timer.hpp"
 #include "boost/asio/write.hpp"
+#include "boost/chrono/duration.hpp"
 #include "boost/date_time/posix_time/posix_time_config.hpp"
 #include "boost/date_time/posix_time/posix_time_types.hpp"
 #include "boost/date_time/posix_time/time_formatters.hpp"
@@ -301,37 +302,37 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
         sc.SetPersistentPointer(1, ptr);
         sc.AddMessageToLog("Started client", 0);
       }
-      if (ptr->gotFirstUpdate())
+      s_SCPositionData position;
+      if (ptr->gotFirstUpdate() && sc.GetTradePosition(position) > 0 &&
+          !position.WorkingOrdersExist)
       {
-        s_SCPositionData position;
-        sc.GetTradePosition(position);
-
-        if (!position.WorkingOrdersExist)
+        auto delta = ptr->position() - position.PositionQuantity;
+        if (delta != 0)
         {
+          sc.SendOrdersToTradeService = 1;
+          sc.AllowMultipleEntriesInSameDirection = 1;
+          sc.AllowEntryWithWorkingOrders = 0;
+          sc.AllowOnlyOneTradePerBar = 0;
 
-          auto delta = ptr->position() - position.PositionQuantity;
-          if (delta != 0)
+          s_SCNewOrder newOrder;
+          newOrder.OrderQuantity = delta;
+          newOrder.OrderType = SCT_ORDERTYPE_MARKET;
+          newOrder.TimeInForce = SCT_TIF_DAY;
+          BOOST_LOG_TRIVIAL(info)
+              << "Current position " << position.PositionQuantity
+              << " Adjusting by " << delta;
+          int ret = 0;
+          if (delta > 0)
           {
-            sc.SendOrdersToTradeService = 1;
-            sc.AllowMultipleEntriesInSameDirection = 1;
-            sc.AllowEntryWithWorkingOrders = 0;
-            sc.AllowOnlyOneTradePerBar = 0;
-
-            s_SCNewOrder newOrder;
-            newOrder.OrderQuantity = std::abs(delta);
-            newOrder.OrderType = SCT_ORDERTYPE_MARKET;
-            newOrder.TimeInForce = SCT_TIF_DAY;
-            BOOST_LOG_TRIVIAL(info)
-                << "Current position " << position.PositionQuantity
-                << " Adjusting by " << delta;
-            if (delta > 0)
-            {
-              sc.BuyEntry(newOrder);
-            }
-            else if (delta < 0)
-            {
-              sc.SellEntry(newOrder);
-            }
+            ret = sc.BuyEntry(newOrder);
+          }
+          else if (delta < 0)
+          {
+            ret = sc.SellEntry(newOrder);
+          }
+          if (ret > 0)
+          {
+            BOOST_LOG_TRIVIAL(error) << "Order submission ignored";
           }
         }
       }
@@ -346,6 +347,12 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       ConnectionInfo.Format("Connected to port %d book %s (ping: %d ms)", port,
                             serverBook.c_str(),
                             timeSinceLastMessage.total_milliseconds());
+
+      if (timeSinceLastMessage >= boost::posix_time::time_duration(0, 0, 5) &&
+          int(timeSinceLastMessage.total_seconds()) % 5 == 0)
+      {
+        sc.AddMessageToLog("Lost connection to server chartbook", 1);
+      }
 
       int HorizontalPosition = Input_HorizontalPosition.GetInt();
       int VerticalPosition = Input_VerticalPosition.GetInt();
