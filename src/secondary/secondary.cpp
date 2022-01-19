@@ -64,10 +64,10 @@ struct SecondaryPlugin
   }
 
   unsigned int port() const { return m_port; }
-  t_OrderQuantity32_64 position()
+  t_OrderQuantity32_64 serverPositionQty()
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    return m_position;
+    return m_serverPosition;
   }
 
   bool gotFirstUpdate()
@@ -157,7 +157,7 @@ private:
                 auto pos2 = position->to_number<double>();
                 m_gotFirstUpdate = true;
                 BOOST_LOG_TRIVIAL(info) << "Got position update" << pos2;
-                m_position = pos2;
+                m_serverPosition = pos2;
               }
             }
           }
@@ -209,7 +209,7 @@ private:
   boost::posix_time::ptime m_lastMessageTime =
       boost::posix_time::microsec_clock::local_time();
   std::string m_serverChartbook;
-  t_OrderQuantity32_64 m_position = 0;
+  t_OrderQuantity32_64 m_serverPosition = 0;
   std::string m_host;
   unsigned int m_port;
   boost::asio::io_service m_service;
@@ -303,10 +303,13 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
         sc.AddMessageToLog("Started client", 0);
       }
       s_SCPositionData position;
+      // We want to wait until we have at least one update because otherwise the
+      // initial "server position" will be zero and that will cause us to close
+      // any open positions which would not be desired.
       if (ptr->gotFirstUpdate() && sc.GetTradePosition(position) > 0 &&
           !position.WorkingOrdersExist)
       {
-        auto delta = ptr->position() - position.PositionQuantity;
+        auto delta = ptr->serverPositionQty() - position.PositionQuantity;
         if (delta != 0)
         {
           sc.SendOrdersToTradeService = 1;
@@ -330,9 +333,13 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           {
             ret = sc.SellEntry(newOrder);
           }
-          if (ret > 0)
+          if (ret < 0)
           {
             BOOST_LOG_TRIVIAL(error) << "Order submission ignored";
+          }
+          else
+          {
+            BOOST_LOG_TRIVIAL(info) << "Order submitted for qty: " << ret;
           }
         }
       }
