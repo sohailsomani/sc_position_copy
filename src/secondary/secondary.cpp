@@ -64,10 +64,10 @@ struct SecondaryPlugin
   }
 
   unsigned int port() const { return m_port; }
-  t_OrderQuantity32_64 serverPositionQty()
+  t_OrderQuantity32_64 primaryPositionQty()
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    return m_serverPosition;
+    return m_primaryPosition;
   }
 
   bool gotFirstUpdate()
@@ -76,10 +76,10 @@ struct SecondaryPlugin
     return m_gotFirstUpdate;
   }
 
-  std::string serverChartbook()
+  std::string primaryChartbook()
   {
     std::lock_guard<std::mutex> guard(m_mutex);
-    return m_serverChartbook;
+    return m_primaryChartbook;
   }
 
   boost::posix_time::ptime timeOfLastMessage()
@@ -150,14 +150,14 @@ private:
                   boost::posix_time::microsec_clock::local_time();
               if (auto cb = p->if_contains("cb"))
               {
-                m_serverChartbook = cb->as_string();
+                m_primaryChartbook = cb->as_string();
               }
               if (auto position = p->if_contains("position"))
               {
                 auto pos2 = position->to_number<double>();
                 m_gotFirstUpdate = true;
                 BOOST_LOG_TRIVIAL(info) << "Got position update" << pos2;
-                m_serverPosition = pos2;
+                m_primaryPosition = pos2;
               }
             }
           }
@@ -208,8 +208,8 @@ private:
   bool m_gotFirstUpdate = false;
   boost::posix_time::ptime m_lastMessageTime =
       boost::posix_time::microsec_clock::local_time();
-  std::string m_serverChartbook;
-  t_OrderQuantity32_64 m_serverPosition = 0;
+  std::string m_primaryChartbook;
+  t_OrderQuantity32_64 m_primaryPosition = 0;
   std::string m_host;
   unsigned int m_port;
   boost::asio::io_service m_service;
@@ -222,6 +222,13 @@ private:
 };
 
 const char *hello_secondary() { return "world"; }
+
+enum class OrderType
+{
+  Market = 0,
+  CrossSpread = 1,
+  JoinBidAsk = 2
+};
 
 SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 {
@@ -237,6 +244,8 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
   SCInputRef Input_TransparentLabelBackground = sc.Input[6];
   SCInputRef Input_TextSize = sc.Input[7];
 
+  SCInputRef Input_OrderType = sc.Input[8];
+
   try
   {
 
@@ -247,6 +256,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       sc.GraphRegion = 0;
       sc.FreeDLL = 1;
       sc.AutoLoop = 0;
+      sc.UpdateAlways = 1; // So ping is up to date
 
       Host.Name = "Host";
       Host.SetString("127.0.0.1");
@@ -257,7 +267,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       Port.SetIntLimits(1024, 65536);
       Port.SetDescription("Port number");
 
-      Subgraph_ConnectionInfo.Name = "Server info";
+      Subgraph_ConnectionInfo.Name = "Primary connection info";
       Subgraph_ConnectionInfo.LineWidth = 20;
       Subgraph_ConnectionInfo.DrawStyle = DRAWSTYLE_CUSTOM_TEXT;
       Subgraph_ConnectionInfo.PrimaryColor = RGB(0, 0, 0);       // black
@@ -291,6 +301,10 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 
       Input_TransparentLabelBackground.Name = "Transparent Label Background";
       Input_TransparentLabelBackground.SetYesNo(false);
+
+      Input_OrderType.Name = "Order type";
+      Input_OrderType.SetCustomInputStrings("Market;Cross spread;Join bid/ask");
+      Input_OrderType.SetCustomInputIndex(0);
     }
     else
     {
@@ -304,12 +318,12 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       }
       s_SCPositionData position;
       // We want to wait until we have at least one update because otherwise the
-      // initial "server position" will be zero and that will cause us to close
+      // initial "primary position" will be zero and that will cause us to close
       // any open positions which would not be desired.
       if (ptr->gotFirstUpdate() && sc.GetTradePosition(position) > 0 &&
           !position.WorkingOrdersExist)
       {
-        auto delta = ptr->serverPositionQty() - position.PositionQuantity;
+        auto delta = ptr->primaryPositionQty() - position.PositionQuantity;
         if (delta != 0)
         {
           sc.SendOrdersToTradeService = 1;
@@ -319,7 +333,24 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 
           s_SCNewOrder newOrder;
           newOrder.OrderQuantity = delta;
-          newOrder.OrderType = SCT_ORDERTYPE_MARKET;
+
+          auto orderType =
+              static_cast<OrderType>(Input_OrderType.GetIndex() + 1);
+          switch (orderType)
+          {
+          case OrderType::Market:
+            newOrder.OrderType = SCT_ORDERTYPE_MARKET;
+            break;
+          case OrderType::CrossSpread:
+            newOrder.OrderType = SCT_ORDERTYPE_LIMIT;
+            newOrder.Price1 = delta > 0 ? sc.Ask : sc.Bid;
+            break;
+          case OrderType::JoinBidAsk:
+            newOrder.OrderType = SCT_ORDERTYPE_LIMIT;
+            newOrder.Price1 = delta > 0 ? sc.Bid : sc.Ask;
+            break;
+          }
+
           newOrder.TimeInForce = SCT_TIF_DAY;
           BOOST_LOG_TRIVIAL(info)
               << "Current position " << position.PositionQuantity
@@ -335,7 +366,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           }
           if (ret < 0)
           {
-            BOOST_LOG_TRIVIAL(error) << "Order submission ignored";
+            BOOST_LOG_TRIVIAL(error) << "Order submission ignored: " << ret;
           }
           else
           {
@@ -345,20 +376,20 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       }
 
       SCString ConnectionInfo;
-      auto serverBook = ptr->serverChartbook();
+      auto primaryChartbook = ptr->primaryChartbook();
       auto timeOfLastMessage = ptr->timeOfLastMessage();
       auto timeSinceLastMessage =
           boost::posix_time::microsec_clock::local_time() - timeOfLastMessage;
       auto port = ptr->port();
 
       ConnectionInfo.Format("Connected to port %d book %s (ping: %d ms)", port,
-                            serverBook.c_str(),
+                            primaryChartbook.c_str(),
                             timeSinceLastMessage.total_milliseconds());
 
       if (timeSinceLastMessage >= boost::posix_time::seconds(5) &&
           int(timeSinceLastMessage.total_seconds()) % 5 == 0)
       {
-        sc.AddMessageToLog("Lost connection to server chartbook", 1);
+        sc.AddMessageToLog("Lost connection to primary chartbook", 1);
       }
 
       int HorizontalPosition = Input_HorizontalPosition.GetInt();
