@@ -333,25 +333,27 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 
           s_SCNewOrder newOrder;
           newOrder.OrderQuantity = delta;
+          newOrder.TimeInForce = SCT_TIF_DAY;
 
-          auto orderType =
-              static_cast<OrderType>(Input_OrderType.GetIndex() + 1);
+          auto orderType = static_cast<OrderType>(Input_OrderType.GetIndex());
           switch (orderType)
           {
           case OrderType::Market:
+            BOOST_LOG_TRIVIAL(info) << "Market order";
             newOrder.OrderType = SCT_ORDERTYPE_MARKET;
             break;
           case OrderType::CrossSpread:
+            BOOST_LOG_TRIVIAL(info) << "Cross spread order";
             newOrder.OrderType = SCT_ORDERTYPE_LIMIT;
             newOrder.Price1 = delta > 0 ? sc.Ask : sc.Bid;
             break;
           case OrderType::JoinBidAsk:
+            BOOST_LOG_TRIVIAL(info) << "Join bid/ask order";
             newOrder.OrderType = SCT_ORDERTYPE_LIMIT;
             newOrder.Price1 = delta > 0 ? sc.Bid : sc.Ask;
             break;
           }
 
-          newOrder.TimeInForce = SCT_TIF_DAY;
           BOOST_LOG_TRIVIAL(info)
               << "Current position " << position.PositionQuantity
               << " Adjusting by " << delta;
