@@ -330,6 +330,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           sc.AllowMultipleEntriesInSameDirection = 1;
           sc.AllowEntryWithWorkingOrders = 0;
           sc.AllowOnlyOneTradePerBar = 0;
+          sc.MaximumPositionAllowed = DBL_MAX;
 
           s_SCNewOrder newOrder;
           newOrder.OrderQuantity = delta;
