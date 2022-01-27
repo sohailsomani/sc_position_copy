@@ -139,6 +139,7 @@ private:
         [this](const boost::system::error_code &ec, std::size_t bytesRead) {
           try
           {
+            m_buffer.pop_back();
             BOOST_LOG_TRIVIAL(trace) << "Received: " << m_buffer;
             boost::json::value jv = boost::json::parse(m_buffer);
             m_buffer.clear();
@@ -245,6 +246,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
   SCInputRef Input_TextSize = sc.Input[7];
 
   SCInputRef Input_OrderType = sc.Input[8];
+  SCInputRef Input_MaxPosition = sc.Input[9];
 
   try
   {
@@ -305,6 +307,10 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       Input_OrderType.Name = "Order type";
       Input_OrderType.SetCustomInputStrings("Market;Cross spread;Join bid/ask");
       Input_OrderType.SetCustomInputIndex(0);
+
+      Input_MaxPosition.Name = "Max position size";
+      Input_MaxPosition.SetDouble(1);
+      Input_MaxPosition.SetDoubleLimits(0, 1e6);
     }
     else
     {
@@ -330,8 +336,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           sc.AllowMultipleEntriesInSameDirection = 1;
           sc.AllowEntryWithWorkingOrders = 0;
           sc.AllowOnlyOneTradePerBar = 0;
-          sc.MaximumPositionAllowed =
-              std::numeric_limits<decltype(sc.MaximumPositionAllowed)>::max();
+          sc.MaximumPositionAllowed = Input_MaxPosition.GetDouble();
 
           s_SCNewOrder newOrder;
           newOrder.OrderQuantity = delta;
@@ -358,7 +363,8 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 
           BOOST_LOG_TRIVIAL(info)
               << "Current position " << position.PositionQuantity
-              << " Adjusting by " << delta;
+              << " Adjusting by " << delta
+              << " Max quantity allowed: " << sc.MaximumPositionAllowed;
           int ret = 0;
           if (delta > 0)
           {
