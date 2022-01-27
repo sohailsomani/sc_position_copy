@@ -135,7 +135,7 @@ private:
   void readNext()
   {
     boost::asio::async_read_until(
-        m_socket, boost::asio::dynamic_buffer(m_buffer), '}',
+        m_socket, boost::asio::dynamic_buffer(m_buffer), '\n',
         [this](const boost::system::error_code &ec, std::size_t bytesRead) {
           try
           {

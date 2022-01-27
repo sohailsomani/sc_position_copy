@@ -100,7 +100,7 @@ private:
   void sendMessage(boost::json::object msg)
   {
     msg["cb"] = m_chartbookName;
-    const auto json = boost::json::serialize(msg);
+    const auto json = boost::json::serialize(msg) + "\n";
     for (auto &conn : m_connections)
     {
       if (conn->socket().is_open())
