@@ -15,6 +15,7 @@
 #include "boost/json.hpp"
 #include "boost/json/parse_options.hpp"
 #include "boost/log/trivial.hpp"
+#include "boost/scope_exit.hpp"
 #include "boost/system/detail/errc.hpp"
 #include "boost/system/is_error_code_enum.hpp"
 #include "scconstants.h"
@@ -140,9 +141,12 @@ private:
           try
           {
             m_buffer.pop_back();
+            BOOST_SCOPE_EXIT(&m_buffer) { m_buffer.clear(); }
+            BOOST_SCOPE_EXIT_END;
+
             BOOST_LOG_TRIVIAL(trace) << "Received: " << m_buffer;
+
             boost::json::value jv = boost::json::parse(m_buffer);
-            m_buffer.clear();
             if (auto p = jv.if_object())
             {
               std::lock_guard<std::mutex> lock(m_mutex);
