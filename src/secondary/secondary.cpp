@@ -247,6 +247,7 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
 
   SCInputRef Input_OrderType = sc.Input[8];
   SCInputRef Input_MaxPosition = sc.Input[9];
+  SCInputRef Input_Multiplier = sc.Input[10];
 
   try
   {
@@ -308,9 +309,15 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
       Input_OrderType.SetCustomInputStrings("Market;Cross spread;Join bid/ask");
       Input_OrderType.SetCustomInputIndex(0);
 
-      Input_MaxPosition.Name = "Max position size";
+      Input_MaxPosition.Name = "Max position size (before multiplier)";
       Input_MaxPosition.SetDouble(1);
       Input_MaxPosition.SetDoubleLimits(0, 1e6);
+
+      Input_Multiplier.Name = "Position multiplier";
+      Input_Multiplier.SetDouble(1);
+      Input_Multiplier.SetDescription("The position received from the primary "
+                                      "chartbook is multiplied by this value");
+      Input_Multiplier.SetDoubleLimits(0, 10);
     }
     else
     {
@@ -323,20 +330,23 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
         sc.AddMessageToLog("Started client", 0);
       }
       s_SCPositionData position;
+      const auto multiplier = std::max(0.0, Input_Multiplier.GetDouble());
       // We want to wait until we have at least one update because otherwise the
       // initial "primary position" will be zero and that will cause us to close
       // any open positions which would not be desired.
       if (ptr->gotFirstUpdate() && sc.GetTradePosition(position) > 0 &&
           !position.WorkingOrdersExist)
       {
-        auto delta = ptr->primaryPositionQty() - position.PositionQuantity;
+        auto delta =
+            multiplier * ptr->primaryPositionQty() - position.PositionQuantity;
         if (delta != 0)
         {
           sc.SendOrdersToTradeService = 1;
           sc.AllowMultipleEntriesInSameDirection = 1;
           sc.AllowEntryWithWorkingOrders = 0;
           sc.AllowOnlyOneTradePerBar = 0;
-          sc.MaximumPositionAllowed = Input_MaxPosition.GetDouble();
+          sc.MaximumPositionAllowed =
+              multiplier * Input_MaxPosition.GetDouble();
 
           s_SCNewOrder newOrder;
           newOrder.OrderQuantity = delta;
@@ -392,9 +402,10 @@ SCSFExport scsf_SecondaryInstance(SCStudyInterfaceRef sc)
           boost::posix_time::microsec_clock::local_time() - timeOfLastMessage;
       auto port = ptr->port();
 
-      ConnectionInfo.Format("Connected to port %d book %s (ping: %d ms)", port,
-                            primaryChartbook.c_str(),
-                            timeSinceLastMessage.total_milliseconds());
+      ConnectionInfo.Format(
+          "Connected to port %d book %s (multiplier: %d, ping: %d ms)", port,
+          primaryChartbook.c_str(), (int)multiplier,
+          timeSinceLastMessage.total_milliseconds());
 
       if (timeSinceLastMessage >= boost::posix_time::seconds(5) &&
           int(timeSinceLastMessage.total_seconds()) % 5 == 0)
