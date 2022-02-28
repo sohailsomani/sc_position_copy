@@ -2,3 +2,5 @@ psutil
 importmagic
 jedi
 epc
+ipython
+mypy
