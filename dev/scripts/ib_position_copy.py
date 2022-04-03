@@ -48,7 +48,7 @@ async def reader(ib: IB, multiplier: float, chartbook_host: str,
     symbol = contract.symbol
     if isinstance(contract, Forex):
         symbol += contract.currency
-    logger = logging.getLogger(f"{chartbook_host} {chartbook_port} {symbol}")
+    logger = logging.getLogger(f"{chartbook_host} {chartbook_port} {ib.client.port} {symbol}")
     trade: t.Optional[Trade] = None
 
     while True:
@@ -237,15 +237,22 @@ async def start(config: Config) -> None:
 
     await asyncio.wait(futs)
 
+async def runConfigs(configs:list[Config]) -> None:
+    futs = []
+    for config in configs:
+        futs.append(
+            ensure_future(start(config))
+        )
+    await asyncio.wait(futs)
 
 @click.command()
 @click.argument("config_module_py", type=click.STRING)
 def main(config_module_py: str) -> None:
     module = SourceFileLoader("config", config_module_py).load_module()
-    config: Config = module.get()
+    configs: list[Config] = module.get()
 
     loop = asyncio.new_event_loop()
-    task = loop.create_task(start(config))
+    task = loop.create_task(runConfigs(configs))
     loop.run_until_complete(task)
 
 
